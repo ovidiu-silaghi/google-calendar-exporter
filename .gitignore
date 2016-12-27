@@ -1,0 +1,6 @@
+# google calendar secret keys file
+gc-oauth-credentials.json
+
+# generated output
+gc-meetings.csv
+gc-meetings.json
