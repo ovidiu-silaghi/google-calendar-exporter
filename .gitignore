@@ -2,5 +2,5 @@
 gc-oauth-credentials.json
 
 # generated output
-gc-meetings.csv
+*.csv
 gc-meetings.json
