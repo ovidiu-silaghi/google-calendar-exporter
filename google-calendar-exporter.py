@@ -37,17 +37,24 @@ def get_gc_credentials():
 def create_date_obj(day, month, year):
     return datetime.datetime(year, month, day, 01, 01, 01, 0).isoformat() + 'Z'
 
-def get_gc_events(service):
+def get_gc_api_service():
+    credentials = get_gc_credentials()
+    http = credentials.authorize(httplib2.Http())
+    return discovery.build('calendar', 'v3', http=http)
+
+
+def get_gc_events():
     ret = []
     page_token = None
-    start_date = create_date_obj(01, 12, 2016)
+    start_date = create_date_obj(01, 01, 2016)
     end_date = create_date_obj(31, 12, 2016)
+    gc_service = get_gc_api_service()
     while True:
         # list method docs:
         # https://developers.google.com/resources/api-libraries/documentation/calendar/v3/python/latest/calendar_v3.events.html#list
-        calendar_list = service.events().list(
+        calendar_list = gc_service.events().list(
             calendarId=CALENDAR_ID, timeMin=start_date, timeMax=end_date,
-            alwaysIncludeEmail=True,singleEvents=True,
+            alwaysIncludeEmail=True,singleEvents=True, orderBy="startTime",
             pageToken=page_token).execute()
         ret.extend(calendar_list["items"])
         page_token = calendar_list.get("nextPageToken")
@@ -68,48 +75,43 @@ def convert_to_datetime(datetime_str):
     return parser.parse(datetime_str)
 
 def drop_dict_to_csv(input_dict, filename):
-    header_names=["summary", "creator email", "nb of attendees", "start time", "location",
-                "status", "updated", "description", "end time", "created", "event duration"]
-    event = input_dict[0]
+    header_names=["summary", "creator email", "created date", "created time",
+                  "start date", "start time", "end date", "end time", "nb of attendees",
+                  "location", "status", "description"]
     with open(filename, "w") as file:
         writer = csv.DictWriter(file, header_names)
         writer.writeheader()
         for event in input_dict:
             try:
-                start_time = convert_to_datetime(event.get("start", "").get("dateTime", ""))
-                end_time = convert_to_datetime(event.get("end", "").get("dateTime", ""))
-                event_duration = end_time - start_time
-                event_duration = event_duration.total_seconds() / 60
-                updated = convert_to_datetime(event.get("updated", ""))
-                created = convert_to_datetime(event.get("created", "").encode("utf-8"))
+                start_datetime = convert_to_datetime(event.get("start", "").get("dateTime", ""))
+                end_datetime = convert_to_datetime(event.get("end", "").get("dateTime", ""))
+                created_datetime = convert_to_datetime(event.get("created", "").encode("utf-8"))
                 writer.writerow(
                     {"summary": event.get("summary",""),
-                                 "creator email": event.get("creator", "").get("email", ""),
+                     "creator email": event.get("creator", "").get("email", ""),
+                     "created date": created_datetime.date(),
+                     "created time": created_datetime.time(),
+                     "start date": start_datetime.date(),
+                     "start time": start_datetime.time(),
+                     "end date": end_datetime.date(),
+                     "end time": end_datetime.time(),
                      "nb of attendees": len(event.get("attendees","")),
-                     "start time": start_time,
                      "location": event.get("location", ""),
                      "status": event.get("status", ""),
-                     "updated": updated,
                      "description": event.get("description", "").encode("utf-8"),
-                     "end time": end_time,
-                     "created" : created,
-                     "event duration": event_duration
                     })
             except UnicodeEncodeError as e:
                 print("[ERROR]: " + str(e))
     display_info_on_written_data(len(input_dict), filename)
 
 def main():
-    credentials = get_gc_credentials()
-    http = credentials.authorize(httplib2.Http())
-    service = discovery.build('calendar', 'v3', http=http)
-    all_events = get_gc_events(service)
+    all_events = get_gc_events()
 
     export_filename = "gc-meetings"
     drop_dict_to_json(all_events, export_filename + ".json")
     drop_dict_to_csv(all_events, export_filename + ".csv")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
 
 
